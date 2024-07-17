@@ -7,6 +7,7 @@
 
 #define BME_SDA 22
 #define BME_SCL 21
+#define RELAY_PIN 5
 Adafruit_BME280 bme; // I2C
 
 const char* ssid = "WLAN";
@@ -24,6 +25,8 @@ void setup() {
         Serial.println("Could not find a valid BME280 sensor, check wiring!");
         while (1);
     }
+
+    pinMode(RELAY_PIN, OUTPUT); // Set the relay pin as output
 
     setup_wifi();
     client.setServer(mqtt_server, 1883);
@@ -63,7 +66,17 @@ void loop() {
     // Publish temperature and humidity
     client.publish("bme280/temperature", tempStr);
     client.publish("bme280/humidity", humStr);
-    delay(5000);
+
+    // Check if humidity is over 60%
+    if (bme.readHumidity() > 60) {
+        client.publish("bme280/fan", "on");
+        digitalWrite(RELAY_PIN, HIGH); // Trigger the relay pin
+    } else {
+        client.publish("bme280/fan", "off");
+        digitalWrite(RELAY_PIN, LOW); // Reset the relay pin
+    }
+
+    delay(10000);
 }
 
 void reconnect() {
