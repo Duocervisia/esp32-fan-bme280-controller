@@ -5,6 +5,11 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 
+#include <Preferences.h>
+
+Preferences preferences;
+String fanSpeed = "60"; // default value
+
 #define BME_SDA 22
 #define BME_SCL 21
 #define RELAY_PIN 5
@@ -30,6 +35,10 @@ void setup() {
 
     setup_wifi();
     client.setServer(mqtt_server, 1883);
+    client.setCallback(callback);
+
+    preferences.begin("my-app", false);
+    fanSpeed = preferences.getString("fanSpeed", "60");
 }
 
 void setup_wifi() {
@@ -68,7 +77,8 @@ void loop() {
     client.publish("bme280/humidity", humStr);
 
     // Check if humidity is over 60%
-    if (bme.readHumidity() > 60) {
+    Serial.println(fanSpeed);
+    if (bme.readHumidity() > fanSpeed.toFloat()) {
         client.publish("bme280/fan", "on");
         digitalWrite(RELAY_PIN, HIGH); // Trigger the relay pin
     } else {
@@ -76,7 +86,7 @@ void loop() {
         digitalWrite(RELAY_PIN, LOW); // Reset the relay pin
     }
 
-    delay(10000);
+    delay(2000);
 }
 
 void reconnect() {
@@ -84,6 +94,7 @@ void reconnect() {
         Serial.print("Attempting MQTT connection...");
         // Attempt to connect, providing the username and password
         if (client.connect("ESP32Client", "user", "dcves345twaesed7hngq8w7o34zn2q83e2q")) {
+            client.subscribe("bme280/fanspeed"); // subscribe to the topic
             Serial.println("connected");
         } else {
             Serial.print("failed, rc=");
@@ -91,5 +102,19 @@ void reconnect() {
             Serial.println(" try again in 5 seconds");
             delay(5000);
         }
+    }
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {
+    // existing code...
+    Serial.println("Message arrived" + String(topic));
+    // check if the topic is "bme280/fanspeed"
+    if (strcmp(topic, "bme280/fanspeed") == 0) {
+        // convert payload to string and store in fanSpeed
+        payload[length] = '\0'; // null-terminate the payload
+        fanSpeed = String((char*)payload);
+
+        // store the new fanSpeed value in the Preferences
+        preferences.putString("fanSpeed", fanSpeed);
     }
 }
